@@ -42,11 +42,12 @@ class TwitchChannelPointsMiner:
         "username",
         "twitch",
         "claim_drops_startup",
+        "drops_timeout",
         "priority",
         "streamers",
         "events_predictions",
         "minute_watcher_thread",
-        "sync_drops_inventory_thread",
+        "sync_campaigns_thread",
         "ws_pool",
         "session_id",
         "running",
@@ -59,6 +60,7 @@ class TwitchChannelPointsMiner:
         self,
         username: str,
         claim_drops_startup: bool = False,
+        drops_timeout: int = 15,
         priority=[Priority.DROPS, Priority.STREAK, Priority.ORDER],
         # This settings will be global shared trought Settings class
         logger_settings: LoggerSettings = LoggerSettings(),
@@ -79,12 +81,13 @@ class TwitchChannelPointsMiner:
         self.twitch = Twitch(self.username, user_agent)
 
         self.claim_drops_startup = claim_drops_startup
+        self.drops_timeout = drops_timeout
         self.priority = priority
 
         self.streamers = []
         self.events_predictions = {}
         self.minute_watcher_thread = None
-        self.sync_drops_inventory_thread = None
+        self.sync_campaigns_thread = None
         self.ws_pool = None
 
         self.session_id = str(uuid.uuid4())
@@ -194,17 +197,17 @@ class TwitchChannelPointsMiner:
                 at_least_one_value_in_settings_is(self.streamers, "claim_drops", True)
                 is True
             ):
-                self.sync_drops_inventory_thread = threading.Thread(
-                    target=self.twitch.sync_drops_inventory,
+                self.sync_campaigns_thread = threading.Thread(
+                    target=self.twitch.sync_campaigns,
                     args=(self.streamers,),
                 )
-                self.sync_drops_inventory_thread.name = "Sync drops inventory"
-                self.sync_drops_inventory_thread.start()
+                self.sync_campaigns_thread.name = "Sync drops inventory"
+                self.sync_campaigns_thread.start()
                 time.sleep(30)
 
             self.minute_watcher_thread = threading.Thread(
                 target=self.twitch.send_minute_watched_events,
-                args=(self.streamers, self.priority),
+                args=(self.streamers, self.priority, self.drops_timeout),
             )
             self.minute_watcher_thread.name = "Minute watcher"
             self.minute_watcher_thread.start()
@@ -269,8 +272,8 @@ class TwitchChannelPointsMiner:
         if self.minute_watcher_thread is not None:
             self.minute_watcher_thread.join()
 
-        if self.sync_drops_inventory_thread is not None:
-            self.sync_drops_inventory_thread.join()
+        if self.sync_campaigns_thread is not None:
+            self.sync_campaigns_thread.join()
 
         time.sleep(1)
         self.__print_report()

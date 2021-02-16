@@ -15,6 +15,7 @@ class Campaign(object):
         "start_at",
         "dt_match",
         "drops",
+        "channels",
     ]
 
     def __init__(self, dict):
@@ -22,6 +23,11 @@ class Campaign(object):
         self.game = dict["game"]
         self.name = dict["name"]
         self.status = dict["status"]
+        self.channels = (
+            []
+            if dict["allow"]["channels"] is None
+            else list(map(lambda x: x["id"], dict["allow"]["channels"]))
+        )
         self.in_inventory = False
 
         self.end_at = datetime.strptime(dict["endAt"], "%Y-%m-%dT%H:%M:%SZ")
@@ -44,6 +50,22 @@ class Campaign(object):
         self.drops = list(
             filter(lambda x: x.dt_match is True and x.is_claimed is False, self.drops)
         )
+
+    def sync_drops(self, drops, callback):
+        # Iterate all the drops from inventory
+        for drop in drops:
+            # Iterate all the drops from out campaigns array
+            # After id match update with:
+            # [currentMinutesWatched, hasPreconditionsMet, dropInstanceID, isClaimed]
+            for i in range(len(self.drops)):
+                current_id = self.drops[i].id
+                if drop["id"] == current_id:
+                    self.drops[i].update(drop["self"])
+                    # If after update we all conditions are meet we can claim the drop
+                    if self.drops[i].is_claimable is True:
+                        claimed = callback(self.drops[i])
+                        self.drops[i].is_claimed = claimed
+                    break
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):

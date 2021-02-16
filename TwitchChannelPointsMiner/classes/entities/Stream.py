@@ -16,14 +16,15 @@ class Stream(object):
         "game",
         "tags",
         "drops_tags",
-        "drops_campaigns",
+        "campaigns",
+        "campaigns_ids",
         "viewers_count",
         "__last_update",
         "spade_url",
         "payload",
         "watch_streak_missing",
         "minute_watched",
-        "__minute_watched_timestamp",
+        "minute_watched_timestamp",
     ]
 
     def __init__(self):
@@ -34,7 +35,8 @@ class Stream(object):
         self.tags = []
 
         self.drops_tags = False
-        self.drops_campaigns = []
+        self.campaigns = []
+        self.campaigns_ids = []
 
         self.viewers_count = 0
         self.__last_update = 0
@@ -82,7 +84,7 @@ class Stream(object):
         return None if self.game in [{}, None] else self.game["name"]
 
     def update_required(self):
-        return self.__last_update == 0 or self.update_elapsed() >= 120
+        return self.__last_update == 0 or self.update_elapsed() >= (60 * 3)
 
     def update_elapsed(self):
         return 0 if self.__last_update == 0 else (time.time() - self.__last_update)
@@ -90,11 +92,20 @@ class Stream(object):
     def init_watch_streak(self):
         self.watch_streak_missing = True
         self.minute_watched = 0
-        self.__minute_watched_timestamp = 0
+        self.minute_watched_timestamp = 0
 
     def update_minute_watched(self):
-        if self.__minute_watched_timestamp != 0:
-            self.minute_watched += round(
-                (time.time() - self.__minute_watched_timestamp) / 60, 5
-            )
-        self.__minute_watched_timestamp = time.time()
+        self.minute_watched += self.elpased_from_last_watch()
+        self.minute_watched_timestamp = time.time()
+
+    def elpased_from_last_watch(self):
+        return (
+            0
+            if self.minute_watched_timestamp == 0
+            else round((time.time() - self.minute_watched_timestamp) / 60, 5)
+        )
+
+    def reset_timing_drops(self):
+        for i in range(0, len(self.campaigns)):
+            for j in range(0, len(self.campaigns[i].drops)):
+                self.campaigns[i].drops[j].update_at = 0

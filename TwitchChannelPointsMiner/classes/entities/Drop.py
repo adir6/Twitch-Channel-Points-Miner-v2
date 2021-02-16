@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 
 from TwitchChannelPointsMiner.classes.Settings import Settings
@@ -20,6 +21,7 @@ class Drop(object):
         "start_at",
         "dt_match",
         "is_printable",
+        "update_at",
     ]
 
     def __init__(self, dict):
@@ -41,6 +43,8 @@ class Drop(object):
         self.end_at = datetime.strptime(dict["endAt"], "%Y-%m-%dT%H:%M:%SZ")
         self.start_at = datetime.strptime(dict["startAt"], "%Y-%m-%dT%H:%M:%SZ")
         self.dt_match = self.start_at < datetime.now() < self.end_at
+
+        self.update_at = 0
 
     def update(
         self,
@@ -71,6 +75,9 @@ class Drop(object):
             )
         )
 
+        if progress["currentMinutesWatched"] > self.current_minutes_watched:
+            self.update_at = time.time()
+
         self.current_minutes_watched = progress["currentMinutesWatched"]
         self.drop_instance_id = progress["dropInstanceID"]
         self.is_claimed = progress["isClaimed"]
@@ -80,7 +87,7 @@ class Drop(object):
         self.percentage_progress = updated_percentage
 
     def __repr__(self):
-        return f"Drop(id={self.id}, name={self.name}, benefit={self.benefit}, minutes_required={self.minutes_required}, has_preconditions_met={self.has_preconditions_met}, current_minutes_watched={self.current_minutes_watched}, percentage_progress={self.percentage_progress}%, drop_instance_id={self.drop_instance_id}, is_claimed={self.is_claimed})"
+        return f"Drop(id={self.id}, name={self.name}, benefit={self.benefit}, minutes_required={self.minutes_required}, has_preconditions_met={self.has_preconditions_met}, current_minutes_watched={self.current_minutes_watched}, percentage_progress={self.percentage_progress}%, drop_instance_id={self.drop_instance_id}, is_claimed={self.is_claimed}, updated={0 if self.update_at == 0 else ((time.time() - self.update_at) // 60)}m ago)"
 
     def __str__(self):
         return (

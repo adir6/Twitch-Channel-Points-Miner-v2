@@ -233,7 +233,10 @@ class Twitch(object):
         # We need the inventory only for get the real updated value/progress
         # Get data from inventory and sync current status with streamers.campaigns
         inventory = self.__get_inventory()
-        if inventory not in [None, {}]:
+        if (
+            inventory not in [None, {}]
+            and inventory["dropCampaignsInProgress"] is not None
+        ):
             # Iterate all campaigns from dashboard (only active, with working drops)
             # In this array we have also the campaigns never started from us (not in nventory)
             for i in range(len(campaigns)):
@@ -245,6 +248,7 @@ class Twitch(object):
                         campaigns[i].sync_drops(
                             progress["timeBasedDrops"], self.claim_drop
                         )
+                        campaigns[i].clear_drops()  # Remove all the claimed drops
                         break
         return campaigns
 
@@ -369,44 +373,53 @@ class Twitch(object):
         drops_array = []
         for campaign in stream.campaigns:
             drops_array += campaign.drops
-        drops_array.sort(key=lambda x: x.update_at, reverse=False)
-        # We have at the end the greatest value so, the last updated time.
-        # If the update of last drops are greater than drops_timeout sorry but we need to change streamer
-        update_at = (
-            0
-            if drops_array[-1].update_at == 0
-            else ((time.time() - drops_array[-1].update_at) / 60)
-        )
-        if streamers[index].stream.minute_watched >= drops_timeout and (
-            (update_at >= drops_timeout)
-            or (
-                drops_array[-1].current_minutes_watched
-                == drops_array[-1].percentage_progress
-                == 0
+
+        if drops_array != []:
+            drops_array.sort(key=lambda x: x.update_at, reverse=False)
+            # We have at the end the greatest value so, the last updated time.
+            # If the update of last drops are greater than drops_timeout sorry but we need to change streamer
+            update_at = (
+                0
+                if drops_array[-1].update_at == 0
+                else ((time.time() - drops_array[-1].update_at) / 60)
             )
-        ):
-            logger.info(
-                f"{streamers[index]} - Last update of the drops was {update_at}m ago , or it's stuck a 0%. Skip this streamers. DEBUG LOG WILL BE DELETED"
-            )
-            # Check if the next index It's in array len(streamers_index)
-            # Where index = integer corresponding to streamers
-            # streamers_index is the array of integer
-            # streamers_index.index(index) is the index where we can find this integer
-            if streamers_index.index(index) + 1 < len(streamers_index):
-                next_streamer = streamers_index[streamers_index.index(index) + 1]
-                # If for the next streamers we have watched lower than drops_timeout//2
-                # then reset timing drops so in the next interation we can add index to streamers_watching
-                # streamers[next_streamer].stream.elpased_from_last_watch() == 0, never watched, pefect.
-                # or >= watching_required watched the last time more than watching_required minutes ago
-                watching_required = max(0, drops_timeout // 2)
-                if (
-                    streamers[next_streamer].stream.elpased_from_last_watch() == 0
-                    or streamers[next_streamer].stream.elpased_from_last_watch()
-                    >= watching_required
-                ):
-                    # logger.info(f"Reset to 0 drops for: {streamers[next_streamer]}")
-                    streamers[next_streamer].stream.reset_timing_drops()
-                return False
+            if streamers[index].stream.minute_watched >= drops_timeout and (
+                (update_at >= drops_timeout)
+                or (
+                    drops_array[-1].current_minutes_watched
+                    == drops_array[-1].percentage_progress
+                    == 0
+                )
+            ):
+                logger.info("[!!!] THE FOLLOWING LOGS WILL BE DELETED [!!!]")
+                logger.info(
+                    f"{streamers[index]} - Last update of the drops was {update_at}m ago , or it's stuck a 0%. Skip this streamers."
+                )
+                for campaign in stream.campaigns:
+                    logger.info(f"{repr(campaign)}")
+                    for drop in campaign.drops:
+                        logger.info(f"{repr(drop)}")
+                    print("\n")
+
+                # Check if the next index It's in array len(streamers_index)
+                # Where index = integer corresponding to streamers
+                # streamers_index is the array of integer
+                # streamers_index.index(index) is the index where we can find this integer
+                if streamers_index.index(index) + 1 < len(streamers_index):
+                    next_streamer = streamers_index[streamers_index.index(index) + 1]
+                    # If for the next streamers we have watched lower than drops_timeout//2
+                    # then reset timing drops so in the next interation we can add index to streamers_watching
+                    # streamers[next_streamer].stream.elpased_from_last_watch() == 0, never watched, pefect.
+                    # or >= watching_required watched the last time more than watching_required minutes ago
+                    watching_required = max(0, drops_timeout // 2)
+                    if (
+                        streamers[next_streamer].stream.elpased_from_last_watch() == 0
+                        or streamers[next_streamer].stream.elpased_from_last_watch()
+                        >= watching_required
+                    ):
+                        # logger.info(f"Reset to 0 drops for: {streamers[next_streamer]}")
+                        streamers[next_streamer].stream.reset_timing_drops()
+                    return False
         return True
 
     def send_minute_watched_events(
@@ -476,7 +489,6 @@ class Twitch(object):
                             logger.debug(
                                 f"{streamers[index]} it's currently stream: {stream} - Campaign currently active here: {len(stream.campaigns)}, drops available: {drops_available}"
                             )
-
                             if (
                                 self.__freshness_drops(
                                     streamers_index=streamers_index,
@@ -520,11 +532,7 @@ class Twitch(object):
 
                         for campaign in streamers[index].stream.campaigns:
                             for drop in campaign.drops:
-                                # We could add .has_preconditions_met condition inside is_printable
-                                if (
-                                    drop.has_preconditions_met is not False
-                                    and drop.is_printable is True
-                                ):
+                                if drop.is_printable is True:
                                     logger.info(
                                         f"{streamers[index]} is streaming {streamers[index].stream}"
                                     )

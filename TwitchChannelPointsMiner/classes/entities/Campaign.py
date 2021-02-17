@@ -48,7 +48,12 @@ class Campaign(object):
 
     def clear_drops(self):
         self.drops = list(
-            filter(lambda x: x.dt_match is True and x.is_claimed is False, self.drops)
+            filter(
+                lambda x: x.dt_match is True
+                and x.is_claimed is False
+                and x.has_preconditions_met is not False,
+                self.drops,
+            )
         )
 
     def sync_drops(self, drops, callback):
